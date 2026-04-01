@@ -40,7 +40,7 @@ do
     archive_name=$package_name'-'$version'-'$os'-'$GOARCH
 
     echo "Building release/$output_binary for $os-$GOARCH..."
-    env GOOS=$GOOS GOARCH=$GOARCH go build \
+    env CGO_ENABLED=1 GOOS=$GOOS GOARCH=$GOARCH go build \
         -ldflags="-s -w -X main.version=$version" \
       -o release/$output_binary ./cmd/netwatcher
     if [ $? -ne 0 ]; then
