@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"lansentry/config"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +19,8 @@ const launchdPlistTemplate = `<?xml version="1.0" encoding="UTF-8"?>
     <key>ProgramArguments</key>
     <array>
         <string>{{.ExecPath}}</string>
+		<string>--db-path</string>
+		<string>{{.DBPath}}</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
@@ -39,11 +42,12 @@ const launchdPlistTemplate = `<?xml version="1.0" encoding="UTF-8"?>
 type launchdConfig struct {
 	ServiceName string
 	ExecPath    string
+	DBPath      string
 	LogDir      string
 }
 
 // Install installs the service to start on boot (user-level launchd agent).
-func Install() error {
+func Install(cfg *config.Config) error {
 	// Get executable path
 	execPath, err := os.Executable()
 	if err != nil {
@@ -80,6 +84,7 @@ func Install() error {
 	config := launchdConfig{
 		ServiceName: serviceName,
 		ExecPath:    execPath,
+		DBPath:      cfg.DBPath,
 		LogDir:      logDir,
 	}
 
