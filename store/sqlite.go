@@ -9,7 +9,7 @@ import (
 	"lansentry/config"
 	"lansentry/device"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 // Store handles all database operations.
