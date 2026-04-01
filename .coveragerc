@@ -1,0 +1,6 @@
+[run]
+source = .
+omit =
+    cmd/netwatcher/*
+    internal/service/*
+    oui/*
