@@ -2,10 +2,13 @@ package resolver
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
+	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -200,18 +203,85 @@ func (r *Resolver) lookupNetBIOS(ip string) string {
 }
 
 // ---------------------------------------------------------------------------
-// Gateway detection (cross-platform via netstat)
+// Gateway detection
+//   Tries in order:
+//   1. ip route show default   (modern Linux, iproute2)
+//   2. netstat -rn             (macOS, legacy Linux with net-tools)
+//   3. /proc/net/route         (Linux fallback, no external tools needed)
 // ---------------------------------------------------------------------------
 
-var gwRe = regexp.MustCompile(`(?:default|0\.0\.0\.0)\s+(\d+\.\d+\.\d+\.\d+)`)
+var (
+	// "default via 192.168.1.1 dev eth0"
+	ipRouteRe = regexp.MustCompile(`default\s+via\s+(\d+\.\d+\.\d+\.\d+)`)
+	// "default  192.168.1.1  UGScg  en0" or "0.0.0.0  192.168.1.1  ..."
+	netstatRe = regexp.MustCompile(`(?:default|0\.0\.0\.0)\s+(\d+\.\d+\.\d+\.\d+)`)
+)
 
 func detectGateway() string {
+	// 1. ip route (iproute2, standard on modern Linux)
+	if gw := detectGatewayIPRoute(); gw != "" {
+		return gw
+	}
+	// 2. netstat (macOS, older Linux)
+	if gw := detectGatewayNetstat(); gw != "" {
+		return gw
+	}
+	// 3. /proc/net/route (Linux without external tools)
+	return detectGatewayProc()
+}
+
+func detectGatewayIPRoute() string {
+	out, err := exec.Command("ip", "route", "show", "default").Output()
+	if err != nil {
+		return ""
+	}
+	if m := ipRouteRe.FindStringSubmatch(string(out)); len(m) >= 2 {
+		return m[1]
+	}
+	return ""
+}
+
+func detectGatewayNetstat() string {
 	out, err := exec.Command("netstat", "-rn").Output()
 	if err != nil {
 		return ""
 	}
-	if m := gwRe.FindStringSubmatch(string(out)); len(m) >= 2 {
+	if m := netstatRe.FindStringSubmatch(string(out)); len(m) >= 2 {
 		return m[1]
+	}
+	return ""
+}
+
+// detectGatewayProc parses /proc/net/route (Linux only).
+// Fields: Iface Destination Gateway Flags RefCnt Use Metric Mask ...
+// Gateway for the default route (Destination == "00000000") is in little-endian hex.
+func detectGatewayProc() string {
+	data, err := os.ReadFile("/proc/net/route")
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			continue
+		}
+		if fields[1] != "00000000" { // default route
+			continue
+		}
+		gw := fields[2]
+		if len(gw) != 8 {
+			continue
+		}
+		// Parse little-endian hex IP: e.g. "0101A8C0" → 192.168.1.1
+		var octets [4]uint64
+		for i := 0; i < 4; i++ {
+			v, err := strconv.ParseUint(gw[i*2:i*2+2], 16, 8)
+			if err != nil {
+				return ""
+			}
+			octets[i] = v
+		}
+		return fmt.Sprintf("%d.%d.%d.%d", octets[3], octets[2], octets[1], octets[0])
 	}
 	return ""
 }
