@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"lansentry/config"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,11 +16,11 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart={{.ExecPath}}
+ExecStart={{.ExecPath}} --db-path {{.DBPath}}
 Restart=on-failure
 RestartSec=10
-StandardOutput=append:{{.LogDir}}/lansentry.log
-StandardError=append:{{.LogDir}}/lansentry.error.log
+StandardOutput=journal
+StandardError=journal
 Environment="PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 [Install]
@@ -28,11 +29,11 @@ WantedBy=default.target
 
 type systemdConfig struct {
 	ExecPath string
-	LogDir   string
+	DBPath   string
 }
 
 // Install installs the service to start on boot (user-level systemd).
-func Install() error {
+func Install(cfg *config.Config) error {
 	// Get executable path
 	execPath, err := os.Executable()
 	if err != nil {
@@ -57,18 +58,12 @@ func Install() error {
 		return fmt.Errorf("failed to create systemd directory: %w", err)
 	}
 
-	// Create log directory
-	logDir := filepath.Join(homeDir, ".local", "share", "lansentry", "logs")
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		return fmt.Errorf("failed to create log directory: %w", err)
-	}
-
 	// Generate unit file
 	unitPath := filepath.Join(systemdDir, serviceName+".service")
 
 	config := systemdConfig{
 		ExecPath: execPath,
-		LogDir:   logDir,
+		DBPath:   cfg.DBPath,
 	}
 
 	tmpl, err := template.New("unit").Parse(systemdUnitTemplate)
@@ -103,7 +98,7 @@ func Install() error {
 
 	fmt.Printf("✅ LANSentry installed successfully!\n")
 	fmt.Printf("   Unit: %s\n", unitPath)
-	fmt.Printf("   Logs: %s\n", logDir)
+	fmt.Printf("   Database: %s\n", cfg.DBPath)
 	fmt.Printf("\nTo start the service now:\n")
 	fmt.Printf("   systemctl --user start %s\n", serviceName)
 	fmt.Printf("\nTo view logs:\n")
