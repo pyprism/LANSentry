@@ -1,4 +1,4 @@
-name: Stashflow CI
+name: LANSentry CI
 
 on: [push, pull_request]
 
