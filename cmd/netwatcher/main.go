@@ -33,14 +33,7 @@ func main() {
 	cfg := config.DefaultConfig()
 	parseFlags(cfg)
 
-	// Handle install/uninstall commands
-	if cfg.Install {
-		if err := service.Install(); err != nil {
-			log.Fatalf("Failed to install service: %v", err)
-		}
-		return
-	}
-
+	// Handle uninstall command first (does not require DB access)
 	if cfg.Uninstall {
 		if err := service.Uninstall(); err != nil {
 			log.Fatalf("Failed to uninstall service: %v", err)
@@ -71,6 +64,15 @@ func main() {
 	// Persist final merged config so CLI overrides are remembered
 	if err := db.SaveConfig(cfg); err != nil {
 		log.Printf("Warning: Failed to save config to database: %v", err)
+	}
+
+	// Install service after config is merged/saved so runtime flags (e.g. Telegram creds)
+	// are persisted and the service can be installed with the same DB path.
+	if cfg.Install {
+		if err := service.Install(cfg); err != nil {
+			log.Fatalf("Failed to install service: %v", err)
+		}
+		return
 	}
 
 	// Initialize scanner
