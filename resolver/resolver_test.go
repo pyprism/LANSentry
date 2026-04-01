@@ -1,6 +1,7 @@
 package resolver
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -38,7 +39,7 @@ func TestCleanHostname(t *testing.T) {
 	}
 }
 
-func TestGatewayRegex(t *testing.T) {
+func TestNetstatRegex(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
@@ -50,7 +51,7 @@ func TestGatewayRegex(t *testing.T) {
 			"192.168.10.1",
 		},
 		{
-			"linux netstat default route",
+			"linux netstat 0.0.0.0 route",
 			"0.0.0.0         192.168.1.1     0.0.0.0         UG    100    0        0 eth0",
 			"192.168.1.1",
 		},
@@ -62,15 +63,65 @@ func TestGatewayRegex(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := gwRe.FindStringSubmatch(tt.input)
+			m := netstatRe.FindStringSubmatch(tt.input)
 			got := ""
 			if len(m) >= 2 {
 				got = m[1]
 			}
 			if got != tt.want {
-				t.Errorf("gwRe match = %q, want %q", got, tt.want)
+				t.Errorf("netstatRe match = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestIPRouteRegex(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			"standard ip route output",
+			"default via 192.168.1.1 dev eth0 proto dhcp metric 100",
+			"192.168.1.1",
+		},
+		{
+			"minimal",
+			"default via 10.0.0.1 dev wlan0",
+			"10.0.0.1",
+		},
+		{
+			"no match",
+			"10.0.0.0/24 dev eth0 proto kernel scope link src 10.0.0.5",
+			"",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := ipRouteRe.FindStringSubmatch(tt.input)
+			got := ""
+			if len(m) >= 2 {
+				got = m[1]
+			}
+			if got != tt.want {
+				t.Errorf("ipRouteRe match = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDetectGatewayProc(t *testing.T) {
+	// detectGatewayProc reads /proc/net/route which only exists on Linux.
+	// We test the hex parsing logic indirectly via the regex/format expectations.
+	// On non-Linux this will simply return "" (file not found), which is correct.
+	gw := detectGatewayProc()
+	// Just verify it doesn't panic and returns a valid IP or empty
+	if gw != "" {
+		parts := strings.Split(gw, ".")
+		if len(parts) != 4 {
+			t.Errorf("detectGatewayProc returned invalid IP: %q", gw)
+		}
 	}
 }
 
@@ -113,4 +164,3 @@ func TestNetBIOSRegex(t *testing.T) {
 		})
 	}
 }
-
