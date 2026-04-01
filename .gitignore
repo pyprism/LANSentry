@@ -1,0 +1,35 @@
+coverage.txt
+# Binaries
+lansentry
+lansentry-*
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test
+*.test
+*.out
+coverage.txt
+
+# Dependency directories
+vendor/
+
+# Database (local testing)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
